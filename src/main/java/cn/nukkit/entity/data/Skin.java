@@ -8,9 +8,14 @@ import com.nimbusds.jose.shaded.json.JSONObject;
 import com.nimbusds.jose.shaded.json.JSONValue;
 import lombok.ToString;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.image.BufferedImage;
+import java.awt.image.*;
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.*;
 
@@ -121,16 +126,71 @@ public class Skin {
         this.skinId = UUID.nameUUIDFromBytes(data) + "." + name;
     }
 
+    void dumpSkinData(RenderedImage skinImage) {
+        try {
+            LocalDateTime time = LocalDateTime.now();
+            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss");
+            File dir = new File("dumped_skins");
+            if (!dir.exists()) {
+                dir.mkdir();
+            }
+            ImageIO.write(skinImage, "png", new File(dir, time.format(dateTimeFormatter) + ".png"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    BufferedImage imageFromData(int width, int height, byte[] data) {
+        DataBuffer buffer = new DataBufferByte(data, data.length);
+        WritableRaster raster = Raster.createInterleavedRaster(buffer, width, height, 4 * width, 4, new int[]{0, 1, 2, 3}, null);
+        ColorModel cm = new ComponentColorModel(ColorModel.getRGBdefault().getColorSpace(), true, false, Transparency.TRANSLUCENT, DataBuffer.TYPE_BYTE);
+        return new BufferedImage(cm, raster, true, null);
+    }
+
     public void setSkinData(byte[] skinData) {
+        int width;
+        int height;
+        switch (skinData.length) {
+            case SINGLE_SKIN_SIZE:
+                width = 64;
+                height = 32;
+                break;
+            case DOUBLE_SKIN_SIZE:
+                width = 64;
+                height = 64;
+                break;
+            case SKIN_128_64_SIZE:
+                width = 128;
+                height = 64;
+                break;
+            case SKIN_128_128_SIZE:
+                width = 128;
+                height = 128;
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid skin");
+        }
+        BufferedImage image = imageFromData(width, height, skinData);
+        dumpSkinData(image);
+        Server.getInstance().getLogger().info("Saved a player's skin from byte array.");
+
         setSkinData(SerializedImage.fromLegacy(skinData));
     }
 
     public void setSkinData(BufferedImage image) {
+        dumpSkinData(image);
+        Server.getInstance().getLogger().info("Saved a player's skin from buffered image.");
+
         setSkinData(parseBufferedImage(image));
     }
 
     public void setSkinData(SerializedImage skinData) {
         Objects.requireNonNull(skinData, "skinData");
+
+        BufferedImage image = imageFromData(skinData.width, skinData.height, skinData.data);
+        dumpSkinData(image);
+        Server.getInstance().getLogger().info("Saved a player's skin from serialized image.");
+
         this.skinData = skinData;
     }
 
